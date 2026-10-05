@@ -28,7 +28,7 @@ def wr(p, s):
     open(p, 'w', encoding='utf-8').write(s)
 
 
-def patch_loop(root):
+def patch_loop(root, wipe_step=None):
     """Convierte el bucle infinito de D_DoomLoop en un bucle del navegador."""
     p = os.path.join(root, 'src', 'doom', 'd_main.c')
     s = rd(p)
@@ -50,16 +50,42 @@ def patch_loop(root):
                 break
         i += 1
     body = s[ob + 1:i]
-    func = ('static void alpine_loop_body(void)\n{\n'
+    func = ((wipe_step or '') + 'static void alpine_loop_body(void)\n{\n'
             '    static int alpine_last_tic = -1;\n'
             '    int alpine_t = I_GetTime();\n'
             '    if (alpine_t == alpine_last_tic) return;\n'
-            '    alpine_last_tic = alpine_t;\n' + body + '\n}\n\n')
+            '    alpine_last_tic = alpine_t;\n'
+            + ('    if (alpine_wipe_active) { alpine_wipe_step(); return; }\n' if wipe_step else '')
+            + body + '\n}\n\n')
     s2 = s[:mw.start()] + 'emscripten_set_main_loop(alpine_loop_body, 0, 1);\n' + s[i + 1:]
     s2 = s2[:m.start()] + func + s2[m.start():]
     s2 = '#include <emscripten.h>\nextern int I_GetTime(void);\n' + s2
     wr(p, s2)
     print('PARCHE bucle principal: OK')
+
+
+def patch_wipe(root):
+    """Hace la transicion de pantalla (melt) sin bloquear: un paso por tic."""
+    p = os.path.join(root, 'src', 'doom', 'd_main.c')
+    s = rd(p)
+    m = re.search(r'wipestart\s*=\s*I_GetTime\s*\(\s*\)\s*-\s*1\s*;', s)
+    ml = re.compile(r'do\s*\{(.*?)\}\s*while\s*\(\s*!\s*done\s*\)\s*;', re.S).search(s, m.end()) if m else None
+    md = re.search(r'done\s*=\s*wipe_ScreenWipe', ml.group(1)) if ml else None
+    if not md:
+        print('AVISO: no se encontro el bucle de transicion; las transiciones seran instantaneas')
+        return None
+    stmts = ml.group(1)[md.start():]
+    step = ('static void alpine_wipe_step(void)\n{\n'
+            '    int nowtime = I_GetTime();\n'
+            '    int tics = nowtime - alpine_wipestart;\n'
+            '    int done;\n'
+            '    if (tics <= 0) return;\n'
+            '    alpine_wipestart = nowtime;\n' + stmts + '\n'
+            '    if (done) alpine_wipe_active = 0;\n}\n\n')
+    s2 = s[:m.start()] + 'alpine_wipestart = I_GetTime () - 1;\n    alpine_wipe_active = 1;' + s[ml.end():]
+    wr(p, 'static int alpine_wipe_active = 0;\nstatic int alpine_wipestart = 0;\n' + s2)
+    print('PARCHE transiciones: OK')
+    return step
 
 
 def patch_hook(root):
@@ -148,7 +174,8 @@ def compile_all(srcs, incs, defs):
 
 
 def main():
-    patch_loop(R)
+    step = patch_wipe(R)
+    patch_loop(R, step)
     patch_hook(R)
     sanitize_config(R)
     srcs, incs, defs = collect(R)
