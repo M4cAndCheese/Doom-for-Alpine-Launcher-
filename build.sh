@@ -5,7 +5,6 @@ set -e
 [ -d doomgeneric ] || git clone --depth 1 https://github.com/ozkl/doomgeneric.git
 SRC=doomgeneric/doomgeneric
 FILES=$(ls $SRC/*.c | grep -vE 'doomgeneric_[a-z]+\.c$|i_(sdl|allegro)(sound|music)\.c$' || true)
-FILES="$FILES $SRC/doomgeneric.c"
 rm -rf dist && mkdir -p dist/wad
 emcc -O2 -w -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -I$SRC $FILES doomgeneric_alpine.c -o dist/doom.js \
   -sSINGLE_FILE=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=64MB -sFORCE_FILESYSTEM=1 -lidbfs.js \
