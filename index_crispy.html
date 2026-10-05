@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Doom</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  [hidden]{display:none!important}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  #canvas{position:fixed;left:0;top:0;width:100%!important;height:100%!important;background:#000}
+  #log{position:fixed;left:8px;top:8px;right:8px;z-index:30;color:#fc6;font:12px monospace;white-space:pre-wrap;pointer-events:none;max-height:45%;overflow:hidden}
+  #jz{position:fixed;top:0;left:0;width:45%;height:100%;z-index:1;touch-action:none}
+  #cam{position:fixed;top:0;right:0;width:55%;height:100%;z-index:1;touch-action:none}
+  #msg{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;color:#fc6;font:20px sans-serif;text-align:center;padding:20px;background:#000}
+  .b{position:fixed;z-index:2;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+     color:#fff;font-family:sans-serif;font-weight:bold;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);
+     border-radius:50%;touch-action:none}
+  .b.sq{border-radius:10px}
+  .b.on{background:rgba(255,200,60,.6)}
+  .joy{background:rgba(255,255,255,.1)}
+  .knob{position:absolute;left:50%;top:50%;width:45%;height:45%;border-radius:50%;background:rgba(255,255,255,.4);
+        border:2px solid rgba(255,255,255,.6);pointer-events:none}
+  .edit .b{outline:2px dashed #fc6}
+  .edit .b.sel{outline:3px solid #fff;box-shadow:0 0 12px #fc6}
+  #gear{position:fixed;left:50%;top:6px;transform:translateX(-50%);width:36px;height:36px;border-radius:50%;
+        background:rgba(255,255,255,.12);color:#fff;font:20px sans-serif;display:flex;align-items:center;justify-content:center;z-index:5}
+  #panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;background:rgba(20,20,20,.94);
+         color:#fff;font:14px sans-serif;border:1px solid #fc6;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;
+         width:320px;max-height:90vh;overflow:auto}
+  #panel label{display:flex;align-items:center;gap:8px}
+  #panel input[type=range]{flex:1}
+  #panel .row{display:flex;gap:8px}
+  #panel button{flex:1;padding:8px;border-radius:8px;border:0;background:#444;color:#fff;font:14px sans-serif}
+  #pdone{background:#c80!important}
+</style></head><body>
+<canvas id="canvas" tabindex="-1"></canvas>
+<div id="log"></div>
+<div id="msg">Cargando…</div>
+<div id="gear">⚙</div>
+<div id="panel" hidden>
+  <b id="pname">Toca un control para editarlo</b>
+  <label>Tamaño <input id="psize" type="range" min="50" max="220" value="100"></label>
+  <label>Opacidad <input id="pop" type="range" min="20" max="100" value="100"></label>
+  <label>Sens. cámara <input id="psens" type="range" min="1" max="20" value="6"></label>
+  <div class="row"><button id="phide">Ocultar</button><button id="preset">Restablecer</button></div>
+  <div class="row"><button id="pcam">Cámara: analógica</button></div>
+  <div class="row"><button id="pdone">Listo</button></div>
+  <small>Arrastra cada control para moverlo.</small>
+</div>
+<script src="/__alpine/host.js"></script>
+<script>
+try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrientation('landscape'); } catch (e) {}
+
+/* ---------- Motor (Crispy Doom) ---------- */
+const msg = document.getElementById('msg'), logEl = document.getElementById('log');
+const lines = [];
+let logOn = true;
+function L(t) { lines.push(String(t)); if (lines.length > 14) lines.shift(); if (logOn) logEl.textContent = lines.join('\n'); }
+window.onerror = (m, s, l) => { logOn = true; L('ERROR: ' + m + ' (' + String(s || '').split('/').pop() + ':' + l + ')'); };
+window.addEventListener('unhandledrejection', e => { logOn = true; L('RECHAZO: ' + (e.reason && e.reason.message || e.reason)); });
+
+const CFG = 'fullscreen 0\naspect_ratio_correct 1\ninteger_scaling 0\nvga_porch_flash 0\nuse_mouse 0\ngrabmouse 0\n';
+const XCFG = 'crispy_widescreen 1\ncrispy_hires 1\ncrispy_uncapped 0\ncrispy_smoothscaling 1\n';
+
+var Module = {
+  canvas: document.getElementById('canvas'),
+  print: t => L(t),
+  printErr: t => L(t),
+  async onRuntimeInitialized() {
+    try {
+      msg.textContent = 'Preparando guardados…';
+      Module.ccall('alpine_mount', null, [], []);
+      const A = Module.alpineFS;
+      await new Promise(r => A.sync(true, r));
+      msg.textContent = 'Cargando WAD…';
+      let name = null, data = null;
+      for (const n of ['doom.wad', 'DOOM.WAD', 'doom1.wad', 'DOOM1.WAD']) {
+        try { const r = await fetch('wad/' + n); if (r.ok) { data = new Uint8Array(await r.arrayBuffer()); name = n; break; } } catch (e) {}
+      }
+      if (!name) { msg.textContent = 'Falta wad/doom.wad dentro del zip'; return; }
+      A.write('/' + name, data);
+      if (!A.exists('/saves/default.cfg')) A.write('/saves/default.cfg', CFG);
+      if (!A.exists('/saves/crispy-doom.cfg')) A.write('/saves/crispy-doom.cfg', XCFG);
+      msg.textContent = 'Toca para empezar (Crispy Doom)';
+      let started = false;
+      const go = () => {
+        if (started) return;
+        started = true;
+        msg.remove();
+        setTimeout(() => { logOn = false; logEl.textContent = ''; }, 15000);
+        try {
+          Module.callMain(['-iwad', '/' + name, '-config', '/saves/default.cfg', '-extraconfig', '/saves/crispy-doom.cfg',
+            '-savedir', '/saves/', '-window', '-geometry', innerWidth + 'x' + innerHeight]);
+        } catch (e) { if (String(e).indexOf('unwind') < 0) { logOn = true; L('ERROR: ' + e); } }
+        setInterval(() => A.sync(false), 4000);
+      };
+      msg.addEventListener('pointerup', go);
+      msg.addEventListener('click', go);
+    } catch (e) { msg.textContent = 'Error: ' + e; }
+  }
+};
+
+/* ---------- Entrada ---------- */
+const cnt = {};
+function key(id, p) {
+  const before = cnt[id] || 0;
+  const after = Math.max(0, before + (p ? 1 : -1));
+  cnt[id] = after;
+  if ((before === 0) !== (after === 0)) {
+    try { Module.ccall('alpine_key', null, ['number', 'number'], [id, after > 0 ? 1 : 0]); } catch (e) {}
+  }
+}
+function releaseAll() { for (const id in cnt) { if (cnt[id] > 0) { cnt[id] = 1; key(+id, 0); } } }
+function axis(x, y) { try { Module.ccall('alpine_move', null, ['number', 'number'], [x, y]); } catch (e) {} }
+function look(dx) { try { Module.ccall('alpine_look', null, ['number'], [dx]); } catch (e) {} }
+
+/* ---------- Controles (posición = centro, en fracción de pantalla) ---------- */
+const CTRL = [
+  { id: 'joy', t: 'joy', label: 'Joystick', x: .15, y: .68, size: 140 },
+  { id: 'fire', k: 4, label: 'FIRE', x: .90, y: .66, size: 92 },
+  { id: 'use', k: 5, label: 'USE', x: .77, y: .84, size: 60 },
+  { id: 'run', k: 6, label: 'RUN', x: .77, y: .60, size: 60 },
+  { id: 'esc', k: 10, label: 'ESC', name: 'Menú (ESC)', x: .95, y: .09, size: 42, sq: 1 },
+  { id: 'ok', k: 9, label: 'OK', name: 'Enter', x: .89, y: .09, size: 42, sq: 1 },
+  { id: 'map', k: 11, label: 'MAP', name: 'Mapa', x: .83, y: .09, size: 42, sq: 1 },
+];
+for (let i = 0; i < 7; i++) CTRL.push({ id: 'w' + (i + 1), k: 20 + i, label: String(i + 1), name: 'Arma ' + (i + 1), x: .04 + i * .055, y: .09, size: 40, sq: 1 });
+CTRL.forEach(c => { c.s = 1; c.h = false; c.name = c.name || c.label; });
+
+let op = 1, camMode = 0, sens = 6, editing = false, sel = null, drag = null;
+const LS = 'doom-layout-v2';
+const $ = id => document.getElementById(id);
+const clamp = v => Math.min(.98, Math.max(.02, v));
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS) || 'null');
+    if (!d) return;
+    op = d.op || 1; camMode = d.cm || 0; sens = d.sens || 6;
+    CTRL.forEach(c => { const v = d.c && d.c[c.id]; if (v) { c.x = v.x; c.y = v.y; c.s = v.s; c.h = v.h; } });
+  } catch (e) {}
+}
+function save() {
+  try {
+    const c = {}; CTRL.forEach(k => c[k.id] = { x: k.x, y: k.y, s: k.s, h: k.h });
+    localStorage.setItem(LS, JSON.stringify({ op, cm: camMode, sens, c }));
+  } catch (e) {}
+}
+function apply(c) {
+  const el = c.el, d = c.size * c.s;
+  el.style.left = c.x * innerWidth + 'px';
+  el.style.top = c.y * innerHeight + 'px';
+  el.style.width = el.style.height = d + 'px';
+  el.style.fontSize = d * .27 + 'px';
+  el.style.display = (c.h && !editing) ? 'none' : 'flex';
+  el.style.opacity = editing ? (c.h ? .3 : 1) : op;
+}
+
+/* ---------- Construcción ---------- */
+CTRL.forEach(c => {
+  const el = c.el = document.createElement('div');
+  el.className = 'b' + (c.sq ? ' sq' : '') + (c.t === 'joy' ? ' joy' : '');
+  if (c.t === 'joy') {
+    const kn = c.knob = document.createElement('div');
+    kn.className = 'knob';
+    kn.style.transform = 'translate(-50%,-50%)';
+    el.appendChild(kn);
+    // Joystick analógico: la velocidad depende de cuánto lo inclines.
+    c.joyMove = e => {
+      const r = el.getBoundingClientRect(), rad = r.width / 2;
+      let dx = e.clientX - (r.left + rad), dy = e.clientY - (r.top + rad);
+      const max = rad * .55, dist = Math.hypot(dx, dy);
+      if (dist > max) { dx *= max / dist; dy *= max / dist; }
+      kn.style.transform = 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px))';
+      let nx = dx / max, ny = dy / max;
+      const m = Math.hypot(nx, ny);
+      if (m < .12) { nx = ny = 0; } else { const k = (m - .12) / .88 / m; nx *= k; ny *= k; }
+      axis(nx, -ny);
+    };
+    c.joyEnd = () => { kn.style.transform = 'translate(-50%,-50%)'; axis(0, 0); };
+  } else el.textContent = c.label;
+  document.body.appendChild(el);
+
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    if (editing) { select(c); drag = { c, ox: e.clientX - c.x * innerWidth, oy: e.clientY - c.y * innerHeight }; return; }
+    if (c.t === 'joy') c.joyMove(e); else { el.classList.add('on'); key(c.k, 1); }
+  });
+  el.addEventListener('pointermove', e => {
+    if (editing) {
+      if (drag && drag.c === c) { c.x = clamp((e.clientX - drag.ox) / innerWidth); c.y = clamp((e.clientY - drag.oy) / innerHeight); apply(c); }
+    } else if (c.t === 'joy' && e.buttons) c.joyMove(e);
+  });
+  const up = e => {
+    e.preventDefault();
+    if (editing) { if (drag) { drag = null; save(); } return; }
+    if (c.t === 'joy') c.joyEnd(); else { el.classList.remove('on'); key(c.k, 0); }
+  };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+});
+
+/* ---------- Joystick flotante: toca en cualquier punto de la izquierda ---------- */
+const J = CTRL.find(c => c.t === 'joy');
+const jz = document.createElement('div');
+jz.id = 'jz';
+document.body.appendChild(jz);
+let jid = null;
+jz.addEventListener('pointerdown', e => {
+  if (editing || jid !== null) return;
+  e.preventDefault(); jz.setPointerCapture(e.pointerId); jid = e.pointerId;
+  J.el.style.left = e.clientX + 'px'; J.el.style.top = e.clientY + 'px'; J.el.style.display = 'flex';
+  J.joyMove(e);
+});
+jz.addEventListener('pointermove', e => { if (e.pointerId === jid) J.joyMove(e); });
+const jEnd = e => { if (e.pointerId !== jid) return; jid = null; J.joyEnd(); apply(J); };
+jz.addEventListener('pointerup', jEnd);
+jz.addEventListener('pointercancel', jEnd);
+
+/* ---------- Cámara: arrastra a la derecha (como un ratón) ---------- */
+const cam = document.createElement('div');
+cam.id = 'cam';
+document.body.appendChild(cam);
+const cs = { id: null, x0: 0, px: 0, l: 0, r: 0, f: 0 };
+function camSet(l, r, f) {
+  if (cs.l !== l) { cs.l = l; key(0, l); }
+  if (cs.r !== r) { cs.r = r; key(1, r); }
+  if (cs.f !== f) { cs.f = f; key(6, f); }
+}
+cam.addEventListener('pointerdown', e => {
+  if (editing || cs.id !== null) return;
+  e.preventDefault(); cam.setPointerCapture(e.pointerId);
+  cs.id = e.pointerId; cs.x0 = cs.px = e.clientX;
+});
+cam.addEventListener('pointermove', e => {
+  if (e.pointerId !== cs.id) return;
+  if (camMode === 0) {
+    look((e.clientX - cs.px) * sens);
+    cs.px = e.clientX;
+  } else {
+    const dx = e.clientX - cs.x0, a = Math.abs(dx), t = a > 14;
+    camSet(t && dx < 0 ? 1 : 0, t && dx > 0 ? 1 : 0, a > 80 ? 1 : 0);
+  }
+});
+const camEnd = e => { if (e.pointerId !== cs.id) return; cs.id = null; camSet(0, 0, 0); };
+cam.addEventListener('pointerup', camEnd);
+cam.addEventListener('pointercancel', camEnd);
+
+/* ---------- Modo edición ---------- */
+function select(c) {
+  sel = c;
+  CTRL.forEach(k => k.el.classList.toggle('sel', k === c));
+  $('pname').textContent = c.name;
+  $('psize').value = c.s * 100;
+  $('phide').textContent = c.h ? 'Mostrar' : 'Ocultar';
+}
+function setEdit(on) {
+  editing = on; drag = null;
+  releaseAll(); camSet(0, 0, 0); cs.id = null; jid = null; axis(0, 0);
+  CTRL.forEach(c => { if (c.t === 'joy') c.knob.style.transform = 'translate(-50%,-50%)'; c.el.classList.remove('on'); });
+  document.body.classList.toggle('edit', on);
+  $('panel').hidden = !on;
+  $('gear').hidden = on;
+  if (!on) { sel = null; CTRL.forEach(k => k.el.classList.remove('sel')); $('pname').textContent = 'Toca un control para editarlo'; }
+  CTRL.forEach(apply);
+}
+const camLabel = () => { $('pcam').textContent = 'Cámara: ' + (camMode ? 'digital' : 'analógica'); };
+$('gear').addEventListener('pointerdown', e => { e.preventDefault(); setEdit(true); });
+$('pcam').onclick = () => { camMode = camMode ? 0 : 1; camLabel(); save(); };
+$('psens').oninput = e => { sens = +e.target.value; save(); };
+$('pdone').onclick = () => { save(); setEdit(false); };
+$('psize').oninput = e => { if (sel) { sel.s = e.target.value / 100; apply(sel); save(); } };
+$('pop').oninput = e => { op = e.target.value / 100; save(); };
+$('phide').onclick = () => { if (sel) { sel.h = !sel.h; apply(sel); select(sel); save(); } };
+$('preset').onclick = () => {
+  try { localStorage.removeItem(LS); } catch (e) {}
+  location.reload();
+};
+addEventListener('resize', () => { CTRL.forEach(apply); });
+
+load();
+$('pop').value = op * 100;
+$('psens').value = sens;
+camLabel();
+CTRL.forEach(apply);
+</script>
+<script src="doom.js" onerror="msg.textContent='No cargó doom.js (¿falta en el zip?)'"></script>
+</body></html>
