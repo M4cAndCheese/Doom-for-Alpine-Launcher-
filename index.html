@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Doom</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  [hidden]{display:none!important}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  #c{position:fixed;left:50%;top:0;height:100%;aspect-ratio:8/5;transform:translateX(-50%);image-rendering:pixelated}
+  #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fc6;font:20px sans-serif;text-align:center;padding:20px}
+  .b{position:fixed;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+     color:#fff;font-family:sans-serif;font-weight:bold;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);
+     border-radius:50%;touch-action:none}
+  .b.sq{border-radius:10px}
+  .b.on{background:rgba(255,200,60,.6)}
+  .joy{background:rgba(255,255,255,.1)}
+  .knob{position:absolute;left:50%;top:50%;width:45%;height:45%;border-radius:50%;background:rgba(255,255,255,.4);
+        border:2px solid rgba(255,255,255,.6);pointer-events:none}
+  .edit .b{outline:2px dashed #fc6}
+  .edit .b.sel{outline:3px solid #fff;box-shadow:0 0 12px #fc6}
+  #gear{position:fixed;left:50%;top:6px;transform:translateX(-50%);width:36px;height:36px;border-radius:50%;
+        background:rgba(255,255,255,.12);color:#fff;font:20px sans-serif;display:flex;align-items:center;justify-content:center;z-index:5}
+  #panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;background:rgba(20,20,20,.92);
+         color:#fff;font:14px sans-serif;border:1px solid #fc6;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;width:300px}
+  #panel label{display:flex;align-items:center;gap:8px}
+  #panel input[type=range]{flex:1}
+  #panel .row{display:flex;gap:8px}
+  #panel button{flex:1;padding:8px;border-radius:8px;border:0;background:#444;color:#fff;font:14px sans-serif}
+  #pdone{background:#c80!important}
+</style></head><body>
+<canvas id="c" width="640" height="400"></canvas>
+<div id="msg">Cargando…</div>
+<div id="gear">⚙</div>
+<div id="panel" hidden>
+  <b id="pname">Toca un control para editarlo</b>
+  <label>Tamaño <input id="psize" type="range" min="50" max="220" value="100"></label>
+  <label>Opacidad <input id="pop" type="range" min="20" max="100" value="100"></label>
+  <div class="row"><button id="phide">Ocultar</button><button id="preset">Restablecer</button></div>
+  <div class="row"><button id="pdone">Listo</button></div>
+  <small>Arrastra cada control para moverlo.</small>
+</div>
+<script src="/__alpine/host.js"></script>
+<script>
+try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrientation('landscape'); } catch (e) {}
+
+/* ---------- Motor ---------- */
+const W = 640, H = 400;
+const ctx = document.getElementById('c').getContext('2d');
+const img = ctx.createImageData(W, H);
+const px = new Uint32Array(img.data.buffer);
+const msg = document.getElementById('msg');
+
+window.onerror = (m, s, l) => { msg.textContent = 'ERROR: ' + m + ' (' + String(s || '').split('/').pop() + ':' + l + ')'; };
+var Module = {
+  alpineDraw(src) {
+    for (let i = 0; i < px.length; i++) {
+      const p = src[i];
+      px[i] = 0xff000000 | ((p & 0xff) << 16) | (p & 0xff00) | ((p >> 16) & 0xff);
+    }
+    ctx.putImageData(img, 0, 0);
+  },
+  async onRuntimeInitialized() {
+    try {
+      msg.textContent = 'Preparando guardados…';
+      Module.ccall('alpine_mount', null, [], []);
+      const A = Module.alpineFS;
+      await new Promise(r => A.sync(true, r));
+      msg.textContent = 'Cargando WAD…';
+      let name = null, data = null;
+      for (const n of ['doom.wad', 'DOOM.WAD', 'doom1.wad', 'DOOM1.WAD']) {
+        try { const r = await fetch('wad/' + n); if (r.ok) { data = new Uint8Array(await r.arrayBuffer()); name = n; break; } } catch (e) {}
+      }
+      if (!name) { msg.textContent = 'Falta wad/doom.wad dentro del zip'; return; }
+      A.write('/' + name, data);
+      A.chdir('/saves');
+      msg.remove();
+      Module.ccall('alpine_start', null, ['string'], ['/' + name]);
+      setInterval(() => A.sync(false), 4000);
+    } catch (e) { msg.textContent = 'Error: ' + e; }
+  }
+};
+
+/* ---------- Teclas ---------- */
+const held = new Set();
+function key(id, p) {
+  if (p) held.add(id); else held.delete(id);
+  try { Module.ccall('alpine_key', null, ['number', 'number'], [id, p]); } catch (e) {}
+}
+function releaseAll() { [...held].forEach(id => key(id, 0)); }
+
+/* ---------- Controles (posición = centro, en fracción de pantalla) ---------- */
+const CTRL = [
+  { id: 'joy', t: 'joy', label: 'Joystick', x: .15, y: .68, size: 140 },
+  { id: 'sl', k: 7, label: '⇤', name: 'Strafe izq.', x: .32, y: .88, size: 44, sq: 1 },
+  { id: 'sr', k: 8, label: '⇥', name: 'Strafe der.', x: .38, y: .88, size: 44, sq: 1 },
+  { id: 'fire', k: 4, label: 'FIRE', x: .90, y: .66, size: 92 },
+  { id: 'use', k: 5, label: 'USE', x: .77, y: .84, size: 60 },
+  { id: 'run', k: 6, label: 'RUN', x: .77, y: .60, size: 60 },
+  { id: 'esc', k: 10, label: 'ESC', name: 'Menú (ESC)', x: .95, y: .09, size: 42, sq: 1 },
+  { id: 'ok', k: 9, label: 'OK', name: 'Enter', x: .89, y: .09, size: 42, sq: 1 },
+  { id: 'map', k: 11, label: 'MAP', name: 'Mapa', x: .83, y: .09, size: 42, sq: 1 },
+];
+for (let i = 0; i < 7; i++) CTRL.push({ id: 'w' + (i + 1), k: 20 + i, label: String(i + 1), name: 'Arma ' + (i + 1), x: .04 + i * .055, y: .09, size: 40, sq: 1 });
+CTRL.forEach(c => { c.s = 1; c.h = false; c.name = c.name || c.label; });
+
+let op = 1, editing = false, sel = null, drag = null;
+const LS = 'doom-layout-v2';
+const $ = id => document.getElementById(id);
+const clamp = v => Math.min(.98, Math.max(.02, v));
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS) || 'null');
+    if (!d) return;
+    op = d.op || 1;
+    CTRL.forEach(c => { const v = d.c && d.c[c.id]; if (v) { c.x = v.x; c.y = v.y; c.s = v.s; c.h = v.h; } });
+  } catch (e) {}
+}
+function save() {
+  try {
+    const c = {}; CTRL.forEach(k => c[k.id] = { x: k.x, y: k.y, s: k.s, h: k.h });
+    localStorage.setItem(LS, JSON.stringify({ op, c }));
+  } catch (e) {}
+}
+function apply(c) {
+  const el = c.el, d = c.size * c.s;
+  el.style.left = c.x * innerWidth + 'px';
+  el.style.top = c.y * innerHeight + 'px';
+  el.style.width = el.style.height = d + 'px';
+  el.style.fontSize = d * .27 + 'px';
+  el.style.display = (c.h && !editing) ? 'none' : 'flex';
+  el.style.opacity = editing ? (c.h ? .3 : 1) : op;
+}
+
+/* ---------- Construcción ---------- */
+CTRL.forEach(c => {
+  const el = c.el = document.createElement('div');
+  el.className = 'b' + (c.sq ? ' sq' : '') + (c.t === 'joy' ? ' joy' : '');
+  if (c.t === 'joy') {
+    const kn = c.knob = document.createElement('div');
+    kn.className = 'knob';
+    kn.style.transform = 'translate(-50%,-50%)';
+    el.appendChild(kn);
+    c.st = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  } else el.textContent = c.label;
+  document.body.appendChild(el);
+
+  const joySet = (id, on) => { if (c.st[id] !== on) { c.st[id] = on; key(id, on); } };
+  const joyMove = e => {
+    const r = el.getBoundingClientRect(), rad = r.width / 2;
+    let dx = e.clientX - (r.left + rad), dy = e.clientY - (r.top + rad);
+    const dist = Math.hypot(dx, dy), max = rad * .55;
+    if (dist > max) { dx *= max / dist; dy *= max / dist; }
+    c.knob.style.transform = 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px))';
+    const th = rad * .2;
+    joySet(0, dx < -th ? 1 : 0); joySet(1, dx > th ? 1 : 0);
+    joySet(2, dy < -th ? 1 : 0); joySet(3, dy > th ? 1 : 0);
+  };
+  const joyEnd = () => { [0, 1, 2, 3].forEach(i => joySet(i, 0)); c.knob.style.transform = 'translate(-50%,-50%)'; };
+
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    if (editing) { select(c); drag = { c, ox: e.clientX - c.x * innerWidth, oy: e.clientY - c.y * innerHeight }; return; }
+    if (c.t === 'joy') joyMove(e); else { el.classList.add('on'); key(c.k, 1); }
+  });
+  el.addEventListener('pointermove', e => {
+    if (editing) {
+      if (drag && drag.c === c) { c.x = clamp((e.clientX - drag.ox) / innerWidth); c.y = clamp((e.clientY - drag.oy) / innerHeight); apply(c); }
+    } else if (c.t === 'joy' && e.buttons) joyMove(e);
+  });
+  const up = e => {
+    e.preventDefault();
+    if (editing) { if (drag) { drag = null; save(); } return; }
+    if (c.t === 'joy') joyEnd(); else { el.classList.remove('on'); key(c.k, 0); }
+  };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+});
+
+/* ---------- Modo edición ---------- */
+function select(c) {
+  sel = c;
+  CTRL.forEach(k => k.el.classList.toggle('sel', k === c));
+  $('pname').textContent = c.name;
+  $('psize').value = c.s * 100;
+  $('phide').textContent = c.h ? 'Mostrar' : 'Ocultar';
+}
+function setEdit(on) {
+  editing = on; drag = null;
+  releaseAll();
+  CTRL.forEach(c => { if (c.t === 'joy') { c.knob.style.transform = 'translate(-50%,-50%)'; [0,1,2,3].forEach(i => c.st[i] = 0); } c.el.classList.remove('on'); });
+  document.body.classList.toggle('edit', on);
+  $('panel').hidden = !on;
+  $('gear').hidden = on;
+  if (!on) { sel = null; CTRL.forEach(k => k.el.classList.remove('sel')); $('pname').textContent = 'Toca un control para editarlo'; }
+  CTRL.forEach(apply);
+}
+$('gear').addEventListener('pointerdown', e => { e.preventDefault(); setEdit(true); });
+$('pdone').onclick = () => { save(); setEdit(false); };
+$('psize').oninput = e => { if (sel) { sel.s = e.target.value / 100; apply(sel); save(); } };
+$('pop').oninput = e => { op = e.target.value / 100; save(); };
+$('phide').onclick = () => { if (sel) { sel.h = !sel.h; apply(sel); select(sel); save(); } };
+$('preset').onclick = () => {
+  try { localStorage.removeItem(LS); } catch (e) {}
+  location.reload();
+};
+addEventListener('resize', () => CTRL.forEach(apply));
+
+load();
+$('pop').value = op * 100;
+CTRL.forEach(apply);
+</script>
+<script src="doom.js" onerror="msg.textContent='No cargó doom.js (¿falta en el zip?)'"></script>
+</body></html>
