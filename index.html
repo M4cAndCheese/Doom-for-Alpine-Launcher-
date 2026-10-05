@@ -7,9 +7,10 @@
 <style>
   [hidden]{display:none!important}
   html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
-  #c{position:fixed;left:50%;top:0;height:100%;aspect-ratio:8/5;transform:translateX(-50%);image-rendering:pixelated}
+  #c{position:fixed;image-rendering:pixelated}
+  #cam{position:fixed;top:0;right:0;width:55%;height:100%;z-index:1;touch-action:none}
   #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fc6;font:20px sans-serif;text-align:center;padding:20px}
-  .b{position:fixed;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+  .b{position:fixed;z-index:2;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;box-sizing:border-box;
      color:#fff;font-family:sans-serif;font-weight:bold;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);
      border-radius:50%;touch-action:none}
   .b.sq{border-radius:10px}
@@ -37,6 +38,7 @@
   <label>Tamaño <input id="psize" type="range" min="50" max="220" value="100"></label>
   <label>Opacidad <input id="pop" type="range" min="20" max="100" value="100"></label>
   <div class="row"><button id="phide">Ocultar</button><button id="preset">Restablecer</button></div>
+  <div class="row"><button id="par">Proporción: 4:3</button></div>
   <div class="row"><button id="pdone">Listo</button></div>
   <small>Arrastra cada control para moverlo.</small>
 </div>
@@ -46,7 +48,8 @@ try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrien
 
 /* ---------- Motor ---------- */
 const W = 640, H = 400;
-const ctx = document.getElementById('c').getContext('2d');
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
 const img = ctx.createImageData(W, H);
 const px = new Uint32Array(img.data.buffer);
 const msg = document.getElementById('msg');
@@ -82,18 +85,20 @@ var Module = {
 };
 
 /* ---------- Teclas ---------- */
-const held = new Set();
+const cnt = {};
 function key(id, p) {
-  if (p) held.add(id); else held.delete(id);
-  try { Module.ccall('alpine_key', null, ['number', 'number'], [id, p]); } catch (e) {}
+  const before = cnt[id] || 0;
+  const after = Math.max(0, before + (p ? 1 : -1));
+  cnt[id] = after;
+  if ((before === 0) !== (after === 0)) {
+    try { Module.ccall('alpine_key', null, ['number', 'number'], [id, after > 0 ? 1 : 0]); } catch (e) {}
+  }
 }
-function releaseAll() { [...held].forEach(id => key(id, 0)); }
+function releaseAll() { for (const id in cnt) { if (cnt[id] > 0) { cnt[id] = 1; key(+id, 0); } } }
 
 /* ---------- Controles (posición = centro, en fracción de pantalla) ---------- */
 const CTRL = [
   { id: 'joy', t: 'joy', label: 'Joystick', x: .15, y: .68, size: 140 },
-  { id: 'sl', k: 7, label: '⇤', name: 'Strafe izq.', x: .32, y: .88, size: 44, sq: 1 },
-  { id: 'sr', k: 8, label: '⇥', name: 'Strafe der.', x: .38, y: .88, size: 44, sq: 1 },
   { id: 'fire', k: 4, label: 'FIRE', x: .90, y: .66, size: 92 },
   { id: 'use', k: 5, label: 'USE', x: .77, y: .84, size: 60 },
   { id: 'run', k: 6, label: 'RUN', x: .77, y: .60, size: 60 },
@@ -104,7 +109,7 @@ const CTRL = [
 for (let i = 0; i < 7; i++) CTRL.push({ id: 'w' + (i + 1), k: 20 + i, label: String(i + 1), name: 'Arma ' + (i + 1), x: .04 + i * .055, y: .09, size: 40, sq: 1 });
 CTRL.forEach(c => { c.s = 1; c.h = false; c.name = c.name || c.label; });
 
-let op = 1, editing = false, sel = null, drag = null;
+let op = 1, ar = 0, editing = false, sel = null, drag = null;
 const LS = 'doom-layout-v2';
 const $ = id => document.getElementById(id);
 const clamp = v => Math.min(.98, Math.max(.02, v));
@@ -113,14 +118,14 @@ function load() {
   try {
     const d = JSON.parse(localStorage.getItem(LS) || 'null');
     if (!d) return;
-    op = d.op || 1;
+    op = d.op || 1; ar = d.ar || 0;
     CTRL.forEach(c => { const v = d.c && d.c[c.id]; if (v) { c.x = v.x; c.y = v.y; c.s = v.s; c.h = v.h; } });
   } catch (e) {}
 }
 function save() {
   try {
     const c = {}; CTRL.forEach(k => c[k.id] = { x: k.x, y: k.y, s: k.s, h: k.h });
-    localStorage.setItem(LS, JSON.stringify({ op, c }));
+    localStorage.setItem(LS, JSON.stringify({ op, ar, c }));
   } catch (e) {}
 }
 function apply(c) {
@@ -142,7 +147,7 @@ CTRL.forEach(c => {
     kn.className = 'knob';
     kn.style.transform = 'translate(-50%,-50%)';
     el.appendChild(kn);
-    c.st = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    c.st = { 2: 0, 3: 0, 7: 0, 8: 0 };
   } else el.textContent = c.label;
   document.body.appendChild(el);
 
@@ -154,10 +159,10 @@ CTRL.forEach(c => {
     if (dist > max) { dx *= max / dist; dy *= max / dist; }
     c.knob.style.transform = 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px))';
     const th = rad * .2;
-    joySet(0, dx < -th ? 1 : 0); joySet(1, dx > th ? 1 : 0);
+    joySet(7, dx < -th ? 1 : 0); joySet(8, dx > th ? 1 : 0);
     joySet(2, dy < -th ? 1 : 0); joySet(3, dy > th ? 1 : 0);
   };
-  const joyEnd = () => { [0, 1, 2, 3].forEach(i => joySet(i, 0)); c.knob.style.transform = 'translate(-50%,-50%)'; };
+  const joyEnd = () => { [2, 3, 7, 8].forEach(i => joySet(i, 0)); c.knob.style.transform = 'translate(-50%,-50%)'; };
 
   el.addEventListener('pointerdown', e => {
     e.preventDefault(); el.setPointerCapture(e.pointerId);
@@ -178,6 +183,40 @@ CTRL.forEach(c => {
   el.addEventListener('pointercancel', up);
 });
 
+/* ---------- Cámara: arrastra a la derecha para girar ---------- */
+const cam = document.createElement('div');
+cam.id = 'cam';
+document.body.appendChild(cam);
+const cs = { id: null, x0: 0, l: 0, r: 0, f: 0 };
+function camSet(l, r, f) {
+  if (cs.l !== l) { cs.l = l; key(0, l); }
+  if (cs.r !== r) { cs.r = r; key(1, r); }
+  if (cs.f !== f) { cs.f = f; key(6, f); }
+}
+cam.addEventListener('pointerdown', e => {
+  if (editing || cs.id !== null) return;
+  e.preventDefault(); cam.setPointerCapture(e.pointerId);
+  cs.id = e.pointerId; cs.x0 = e.clientX;
+});
+cam.addEventListener('pointermove', e => {
+  if (e.pointerId !== cs.id) return;
+  const dx = e.clientX - cs.x0, a = Math.abs(dx), t = a > 14;
+  camSet(t && dx < 0 ? 1 : 0, t && dx > 0 ? 1 : 0, a > 80 ? 1 : 0);
+});
+const camEnd = e => { if (e.pointerId !== cs.id) return; cs.id = null; camSet(0, 0, 0); };
+cam.addEventListener('pointerup', camEnd);
+cam.addEventListener('pointercancel', camEnd);
+
+/* ---------- Proporción de pantalla ---------- */
+const ARS = [['4:3', 4 / 3], ['16:10', 1.6], ['Llenar', 0]];
+function fit() {
+  const W0 = innerWidth, H0 = innerHeight, r = ARS[ar][1];
+  let w = W0, h = H0;
+  if (r) { w = H0 * r; if (w > W0) { w = W0; h = W0 / r; } }
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.style.left = (W0 - w) / 2 + 'px'; cv.style.top = (H0 - h) / 2 + 'px';
+}
+
 /* ---------- Modo edición ---------- */
 function select(c) {
   sel = c;
@@ -188,8 +227,8 @@ function select(c) {
 }
 function setEdit(on) {
   editing = on; drag = null;
-  releaseAll();
-  CTRL.forEach(c => { if (c.t === 'joy') { c.knob.style.transform = 'translate(-50%,-50%)'; [0,1,2,3].forEach(i => c.st[i] = 0); } c.el.classList.remove('on'); });
+  releaseAll(); camSet(0, 0, 0); cs.id = null;
+  CTRL.forEach(c => { if (c.t === 'joy') { c.knob.style.transform = 'translate(-50%,-50%)'; [2,3,7,8].forEach(i => c.st[i] = 0); } c.el.classList.remove('on'); });
   document.body.classList.toggle('edit', on);
   $('panel').hidden = !on;
   $('gear').hidden = on;
@@ -197,6 +236,7 @@ function setEdit(on) {
   CTRL.forEach(apply);
 }
 $('gear').addEventListener('pointerdown', e => { e.preventDefault(); setEdit(true); });
+$('par').onclick = () => { ar = (ar + 1) % ARS.length; $('par').textContent = 'Proporción: ' + ARS[ar][0]; fit(); save(); };
 $('pdone').onclick = () => { save(); setEdit(false); };
 $('psize').oninput = e => { if (sel) { sel.s = e.target.value / 100; apply(sel); save(); } };
 $('pop').oninput = e => { op = e.target.value / 100; save(); };
@@ -205,11 +245,13 @@ $('preset').onclick = () => {
   try { localStorage.removeItem(LS); } catch (e) {}
   location.reload();
 };
-addEventListener('resize', () => CTRL.forEach(apply));
+addEventListener('resize', () => { CTRL.forEach(apply); fit(); });
 
 load();
 $('pop').value = op * 100;
+$('par').textContent = 'Proporción: ' + ARS[ar][0];
 CTRL.forEach(apply);
+fit();
 </script>
 <script src="doom.js" onerror="msg.textContent='No cargó doom.js (¿falta en el zip?)'"></script>
 </body></html>

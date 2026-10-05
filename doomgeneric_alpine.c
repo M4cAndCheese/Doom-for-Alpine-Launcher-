@@ -5,6 +5,28 @@
 #include "doomkeys.h"
 #include "doomgeneric.h"
 
+// Si doomkeys.h define estas teclas, se usan; si no, valores por defecto de Doom.
+#ifdef KEY_FIRE
+#define K_FIRE KEY_FIRE
+#else
+#define K_FIRE KEY_RCTRL
+#endif
+#ifdef KEY_USE
+#define K_USE KEY_USE
+#else
+#define K_USE ' '
+#endif
+#ifdef KEY_STRAFE_L
+#define K_SL KEY_STRAFE_L
+#else
+#define K_SL ','
+#endif
+#ifdef KEY_STRAFE_R
+#define K_SR KEY_STRAFE_R
+#else
+#define K_SR '.'
+#endif
+
 #define QSIZE 256
 static unsigned short queue[QSIZE];
 static int qr = 0, qw = 0;
@@ -15,11 +37,11 @@ static unsigned char map_key(int id) {
     case 1: return KEY_RIGHTARROW;
     case 2: return KEY_UPARROW;
     case 3: return KEY_DOWNARROW;
-    case 4: return KEY_RCTRL;
-    case 5: return ' ';
+    case 4: return K_FIRE;
+    case 5: return K_USE;
     case 6: return KEY_RSHIFT;
-    case 7: return ',';
-    case 8: return '.';
+    case 7: return K_SL;
+    case 8: return K_SR;
     case 9: return KEY_ENTER;
     case 10: return KEY_ESCAPE;
     case 11: return KEY_TAB;
