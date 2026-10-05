@@ -4,6 +4,9 @@
 #include <emscripten.h>
 #include "doomkeys.h"
 #include "doomgeneric.h"
+#include "d_event.h"
+
+extern int I_GetTime(void);
 
 // Si doomkeys.h define estas teclas, se usan; si no, valores por defecto de Doom.
 #ifdef KEY_FIRE
@@ -30,6 +33,22 @@
 #define QSIZE 256
 static unsigned short queue[QSIZE];
 static int qr = 0, qw = 0;
+static int cnt[256];
+
+static void push(int pressed, unsigned char k) {
+  int next = (qw + 1) % QSIZE;
+  if (next == qr) return;
+  queue[qw] = (pressed ? 0x100 : 0) | k;
+  qw = next;
+}
+
+// Cada tecla lleva un contador: varias fuentes (botón, joystick) pueden compartirla.
+static void kpress(unsigned char k, int p) {
+  int before = cnt[k], after = before + (p ? 1 : -1);
+  if (after < 0) after = 0;
+  cnt[k] = after;
+  if ((before == 0) != (after == 0)) push(after > 0, k);
+}
 
 static unsigned char map_key(int id) {
   switch (id) {
@@ -53,15 +72,54 @@ static unsigned char map_key(int id) {
 
 EMSCRIPTEN_KEEPALIVE void alpine_key(int id, int pressed) {
   unsigned char k = map_key(id);
-  int next = (qw + 1) % QSIZE;
-  if (!k || next == qr) return;
-  queue[qw] = (pressed ? 0x100 : 0) | k;
-  qw = next;
+  if (k) kpress(k, pressed);
 }
 
+/* ---- Entrada analógica ---- */
+static float mx = 0, my = 0;   // joystick: x = lateral, y = adelante (-1..1)
+static float look = 0;         // giro de cámara acumulado
+static float acc_x = 0, acc_y = 0;
+static int st_x = 0, st_y = 0, auto_run = 0;
+
+EMSCRIPTEN_KEEPALIVE void alpine_move(float x, float y) { mx = x; my = y; }
+EMSCRIPTEN_KEEPALIVE void alpine_look(float dx) { look += dx; }
+
+static float absf(float v) { return v < 0 ? -v : v; }
+
+// Velocidad proporcional: la tecla se pulsa en una fracción de los tics (PWM).
+static void pwm_axis(float v, float *acc, int *state, unsigned char kneg, unsigned char kpos) {
+  float a = absf(v);
+  int want = 0;
+  if (a > 0.1f) {
+    *acc += a;
+    if (*acc >= 1.0f) { *acc -= 1.0f; want = v < 0 ? -1 : 1; }
+  } else {
+    *acc = 0;
+  }
+  if (want != *state) {
+    if (*state < 0) kpress(kneg, 0);
+    if (*state > 0) kpress(kpos, 0);
+    if (want < 0) kpress(kneg, 1);
+    if (want > 0) kpress(kpos, 1);
+    *state = want;
+  }
+}
+
+/* ---- Salida de vídeo y plataforma ---- */
 EM_JS(void, js_draw, (unsigned ptr, int n), {
   if (Module.alpineDraw) Module.alpineDraw(HEAPU32.subarray(ptr >> 2, (ptr >> 2) + n));
 });
+
+EM_JS(void, js_mount, (void), {
+  FS.mkdir('/saves');
+  FS.mount(IDBFS, {}, '/saves');
+  Module.alpineFS = {
+    sync: function(populate, cb) { FS.syncfs(populate, cb || function() {}); },
+    write: function(path, data) { FS.writeFile(path, data); },
+    chdir: function(path) { FS.chdir(path); }
+  };
+});
+EMSCRIPTEN_KEEPALIVE void alpine_mount(void) { js_mount(); }
 
 void DG_Init(void) {}
 void DG_DrawFrame(void) { js_draw((unsigned)(uintptr_t)DG_ScreenBuffer, DOOMGENERIC_RESX * DOOMGENERIC_RESY); }
@@ -78,18 +136,30 @@ int DG_GetKey(int *pressed, unsigned char *key) {
   return 1;
 }
 
-EM_JS(void, js_mount, (void), {
-  FS.mkdir('/saves');
-  FS.mount(IDBFS, {}, '/saves');
-  Module.alpineFS = {
-    sync: function(populate, cb) { FS.syncfs(populate, cb || function() {}); },
-    write: function(path, data) { FS.writeFile(path, data); },
-    chdir: function(path) { FS.chdir(path); }
-  };
-});
-EMSCRIPTEN_KEEPALIVE void alpine_mount(void) { js_mount(); }
+static int last_tic = -1;
 
-static void frame(void) { doomgeneric_Tick(); }
+// Se avanza solo cuando toca un tic nuevo: así el motor no se queda esperando en bucle.
+static void frame(void) {
+  int t = I_GetTime();
+  if (t == last_tic) return;
+  last_tic = t;
+
+  pwm_axis(mx, &acc_x, &st_x, K_SL, K_SR);
+  pwm_axis(my, &acc_y, &st_y, KEY_DOWNARROW, KEY_UPARROW);
+  int want_run = (absf(mx) > 0.85f || absf(my) > 0.85f);
+  if (want_run != auto_run) { auto_run = want_run; kpress(KEY_RSHIFT, want_run); }
+
+  int dx = (int)look;
+  look -= dx;
+  if (dx) {
+    event_t ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = ev_mouse;
+    ev.data2 = dx;
+    D_PostEvent(&ev);
+  }
+  doomgeneric_Tick();
+}
 
 EMSCRIPTEN_KEEPALIVE void alpine_start(const char *iwad) {
   static char *argv[] = { "doom", "-iwad", NULL };
