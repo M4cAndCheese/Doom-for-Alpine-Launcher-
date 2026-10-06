@@ -14,6 +14,4 @@ HOW TO INSTAL:
 
 4.- Convert the folder in a .zip again
 
-5.- Go to App Studio in Alpine Launcher and import the zip
-
-I only have tested with the Ultimate Doom wad so you can try to get it running with another DOOM wad, I don't know about DOOM 2 
+5.- Go to App Studio in Alpine Launcher import the zip and play
