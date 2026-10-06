@@ -1,17 +1,28 @@
 <img width="1386" height="640" alt="WhatsApp Image 2026-10-05 at 18 30 57" src="https://github.com/user-attachments/assets/0d19f07b-fe0e-4847-ad01-c5a951ac6dc6" />
-Doom for Alpine Launcher 
+Early gameplay screenshot
 
+DOOM Alpine Launcher port
 --------------------------
-This is a simple port of Doom for the Alpine Launcher app, don't has the music and widescreen support.
+This is a simple port of Doom [Alpine Launcher](https://play.google.com/store/apps/details?id=com.markusmaribu.alpinelauncher&hl=es_BO) don't has the music and widescreen support.
 
-HOW TO INSTAL:
+----------------------------------------------------------
+WHAT WORKS:
+----------------------------------------------------------
+-The full game from the start to end
 
-1.- Go to actions and run the "build" workflow
+-All the sound effects
 
-2.- Download the .zip what it creates
+----------------------------------------------------------
+WHAT DONT WORKS:
+----------------------------------------------------------
+-The music
 
-3.- Extract it and put your legal Doom wad in the wad folder and call it DOOM.wad or Doom.wad
+-The transitions
 
-4.- Convert the folder in a .zip again
+-The virtual keyboard for saving the game
 
-5.- Go to App Studio in Alpine Launcher import the zip and play
+-The transitions
+
+---------------------------------------------------------
+HOW TO INSTALL:
+---------------------------------------------------------
