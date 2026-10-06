@@ -88,6 +88,23 @@ def patch_wipe(root):
     return step
 
 
+def patch_savename(root, rel=('src', 'doom', 'm_menu.c')):
+    """Al guardar, rellena un nombre ("PARTIDA N") para no necesitar teclado."""
+    p = os.path.join(root, *rel)
+    if not os.path.exists(p):
+        print('AVISO: no se encontro m_menu.c; guardar pedira escribir un nombre')
+        return
+    s = rd(p)
+    m = re.search(r'saveCharIndex\s*=\s*strlen\s*\(\s*savegamestrings\s*\[\s*choice\s*\]\s*\)\s*;', s)
+    if not m or 'PARTIDA' in s:
+        print('AVISO: no se pudo parchear el nombre de guardado')
+        return
+    ins = ('if (savegamestrings[choice][0] == 0)\n'
+           '        snprintf(savegamestrings[choice], SAVESTRINGSIZE, "PARTIDA %d", choice + 1);\n    ')
+    wr(p, '#include <stdio.h>\n' + s[:m.start()] + ins + s[m.start():])
+    print('PARCHE nombre de guardado: OK')
+
+
 def patch_hook(root):
     """Llama a alpine_tic_hook() al inicio de cada tic (entrada analogica)."""
     for f in sorted(glob.glob(os.path.join(root, 'src', '*.c'))):
@@ -176,6 +193,7 @@ def compile_all(srcs, incs, defs):
 def main():
     step = patch_wipe(R)
     patch_loop(R, step)
+    patch_savename(R)
     patch_hook(R)
     sanitize_config(R)
     srcs, incs, defs = collect(R)
