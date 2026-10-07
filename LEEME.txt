@@ -1,0 +1,7 @@
+DESDE ANDROID (sin PC), con GitHub Actions
+Archivos del repositorio: index.html, index_crispy.html, manifest.json, icon.png,
+doomgeneric_alpine.c, alpine_crispy.c, build.sh, build_crispy.sh, build_doomgeneric.sh
+y el flujo .github/workflows/*.yml (corre "bash build.sh").
+build.sh intenta Crispy Doom (ultrawide). Si falla, usa doomgeneric (4:3).
+Al final del log aparece "Motor usado: ...".
+Descarga el artifact "doom-alpine", pon tu DOOM.WAD como wad/doom.wad y abrelo en Alpine Launcher.

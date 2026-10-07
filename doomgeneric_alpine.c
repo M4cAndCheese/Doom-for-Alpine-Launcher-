@@ -65,6 +65,13 @@ static unsigned char map_key(int id) {
     case 10: return KEY_ESCAPE;
     case 11: return KEY_TAB;
     case 12: return 'y';
+    case 13: return 'n';
+#ifdef KEY_F6
+    case 14: return KEY_F6;
+#endif
+#ifdef KEY_F9
+    case 15: return KEY_F9;
+#endif
     default: if (id >= 20 && id <= 26) return '1' + (id - 20);
   }
   return 0;

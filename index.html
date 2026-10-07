@@ -87,7 +87,9 @@ var Module = {
       A.chdir('/saves');
       msg.remove();
       Module.ccall('alpine_start', null, ['string'], ['/' + name]);
-      setInterval(() => A.sync(false), 4000);
+      setInterval(() => A.sync(false), 2000);
+      document.addEventListener('visibilitychange', () => { if (document.hidden) A.sync(false); });
+      addEventListener('pagehide', () => A.sync(false));
     } catch (e) { msg.textContent = 'Error: ' + e; }
   }
 };
@@ -119,6 +121,10 @@ const CTRL = [
   { id: 'esc', k: 10, label: 'MENÚ', name: 'Menú', x: .95, y: .09, size: 48, sq: 1 },
   { id: 'ok', k: 9, label: 'OK', name: 'Aceptar (Enter)', x: .89, y: .09, size: 48, sq: 1 },
   { id: 'map', k: 11, label: 'MAPA', name: 'Mapa', x: .83, y: .09, size: 48, sq: 1 },
+  { id: 'save', k: 14, label: 'GUARDAR', name: 'Guardado rápido', x: .95, y: .26, size: 56, sq: 1 },
+  { id: 'load', k: 15, label: 'CARGAR', name: 'Carga rápida', x: .87, y: .26, size: 56, sq: 1 },
+  { id: 'yes', k: 12, label: 'SÍ', name: 'Sí (confirmar)', x: .79, y: .26, size: 48, sq: 1 },
+  { id: 'no', k: 13, label: 'NO', name: 'No (cancelar)', x: .73, y: .26, size: 48, sq: 1 },
 ];
 for (let i = 0; i < 7; i++) CTRL.push({ id: 'w' + (i + 1), k: 20 + i, label: String(i + 1), name: 'Arma ' + (i + 1), x: .04 + i * .055, y: .09, size: 44, sq: 1 });
 CTRL.forEach(c => { c.s = 1; c.h = false; c.name = c.name || c.label; });
@@ -147,7 +153,7 @@ function apply(c) {
   el.style.left = c.x * innerWidth + 'px';
   el.style.top = c.y * innerHeight + 'px';
   el.style.width = el.style.height = d + 'px';
-  el.style.fontSize = d * (c.label.length > 4 ? .2 : c.label.length > 2 ? .25 : .3) + 'px';
+  el.style.fontSize = d * (c.label.length > 6 ? .17 : c.label.length > 4 ? .2 : c.label.length > 2 ? .25 : .3) + 'px';
   el.style.display = (c.h && !editing) ? 'none' : 'flex';
   el.style.opacity = editing ? (c.h ? .3 : 1) : op;
 }
