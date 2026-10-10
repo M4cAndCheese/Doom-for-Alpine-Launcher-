@@ -60,7 +60,7 @@ try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrien
 /* ---------- Motor (Crispy Doom) ---------- */
 const msg = document.getElementById('msg'), logEl = document.getElementById('log'), cvs = document.getElementById('canvas');
 const lines = [];
-let logOn = false, logFilter = null;
+let logOn = true, logFilter = null;
 function showLog() { const v = logFilter ? lines.filter(l => logFilter.test(l)) : lines; logEl.textContent = v.slice(-22).join('\n'); }
 function L(t) {
   t = String(t); lines.push(t); if (lines.length > 600) lines.shift();
@@ -357,5 +357,8 @@ CTRL.forEach(apply);
 $('plog').onclick = () => { logFilter = null; logOn = !logOn; if (logOn) showLog(); else logEl.textContent = ''; };
 $('psnd').onclick = () => { logFilter = /snd|sound|music|opl|audio|mix|sdl|midi|wipe|transici|save|guard/i; logOn = true; showLog(); };
 </script>
-<script src="doom.js" onerror="msg.textContent='No cargó doom.js (¿falta en el zip?)'"></script>
+<script src="doom.js" onerror="msg.textContent='No cargó doom.js (¿falta en el zip?)'">L('Diagnóstico: JS cargado · controles: ' + CTRL.length + ' · ventana ' + innerWidth + 'x' + innerHeight);
+setTimeout(() => L('Diagnóstico 10 s · canvas ' + cvs.width + 'x' + cvs.height + ' · cargando: ' + (document.getElementById('msg') ? 'sí' : 'no')), 10000);
+setTimeout(() => { logOn = false; logEl.textContent = ''; }, 25000);
+</script>
 </body></html>

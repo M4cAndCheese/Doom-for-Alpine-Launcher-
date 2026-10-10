@@ -193,9 +193,25 @@ def compile_all(srcs, incs, defs):
     print('Tamano doom.js:', os.path.getsize(os.path.join('dist', 'doom.js')) // 1024, 'KB')
 
 
+def patch_nowipe(root):
+    """Desactiva la transicion (melt) bloqueante: el navegador no repinta durante ella y el canvas queda en negro."""
+    for dp, dn, fn in os.walk(os.path.join(root, 'src')):
+        if 'wipe.c' in fn:
+            pw = os.path.join(dp, 'wipe.c')
+            t = rd(pw)
+            t2, n = re.subn(r'(int\s+wipe_ScreenWipe\s*\([^)]*\)\s*\{)',
+                            r'\1\n    return 1; /* alpine: sin transicion bloqueante */', t, count=1)
+            if n:
+                wr(pw, t2)
+                print('PARCHE transicion sin bloqueo: OK')
+                return
+    print('AVISO: no se encontro wipe_ScreenWipe')
+
+
 def main():
     step = patch_wipe(R)
     patch_loop(R, step)
+    patch_nowipe(R)
     patch_savename(R)
     patch_hook(R)
     sanitize_config(R)
