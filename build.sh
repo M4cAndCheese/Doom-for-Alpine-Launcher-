@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Uso: bash build.sh [CARPETA_CON_DOOM.WAD]
 # Intenta Crispy Doom (ultrawide); si falla, usa doomgeneric (la version estable).
+set -o pipefail
 rm -rf dist && mkdir -p dist/wad
-if bash build_crispy.sh; then
+if bash build_crispy.sh 2>&1 | tee crispy.log; then
   echo "=== MOTOR: Crispy Doom ==="
 else
   echo "=== MOTOR: Crispy Doom fallo; se usa doomgeneric (4:3) ==="
   rm -rf dist && mkdir -p dist/wad
+  tail -n 400 crispy.log > dist/crispy_error.txt 2>/dev/null || true
   bash build_doomgeneric.sh
 fi
 set -e
