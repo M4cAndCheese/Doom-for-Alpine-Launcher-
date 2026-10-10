@@ -1,20 +1,31 @@
-DESDE ANDROID (sin PC), con GitHub Actions
-Archivos del repositorio: index.html, index_crispy.html, manifest.json, icon.png,
-doomgeneric_alpine.c, alpine_crispy.c, build.sh, build_crispy.sh, build_doomgeneric.sh
-y el flujo .github/workflows/*.yml (corre "bash build.sh").
-build.sh intenta Crispy Doom (ultrawide). Si falla, usa doomgeneric (4:3).
-Al final del log aparece "Motor usado: ...".
-Descarga el artifact "doom-alpine", pon tu DOOM.WAD como wad/doom.wad y abrelo en Alpine Launcher.
+DOOM 1 para Alpine Launcher (motor Crispy Doom)
+==================================================
 
-----------------------------------------------------------
-MÚSICA (opcional, versión Crispy):
-----------------------------------------------------------
-El WAD trae la música en formato MIDI y el build web no incluye sintetizador MIDI,
-por eso sin pistas extra el juego queda en silencio. Para tener música:
-  1. Crea la carpeta wad/music/ junto a doom.wad.
-  2. Pon pistas OGG o MP3 con el nombre de la canción del WAD (ej. D_E1M1.ogg, D_INTRO.mp3).
-  3. Crea wad/music/list.txt con un nombre de archivo por línea.
-El build las copia al iniciar. Si no hay pistas, el juego sigue sin música pero sin errores.
+ARCHIVOS DEL REPOSITORIO
+- index_crispy.html, manifest.json, icon.png: la app web.
+- alpine_crispy.c: entrada tactil y guardados para Crispy Doom.
+- build.sh y build_crispy.sh: compilan Crispy Doom a WebAssembly.
+- .github/workflows/main.yml: el workflow de GitHub (corre "bash build.sh").
 
-PANTALLA: en el engranaje (⚙) eliges "Completa (sin estirar)" o "4:3".
-El juego arranca solo. Guardar y cargar están en la barra de arriba (GUARD / CARGA).
+CÓMO OBTENER EL JUEGO (sin PC)
+1. Sube el repo a GitHub y corre el workflow "build" (Actions).
+2. Si termina bien, descarga el artifact "doom-alpine".
+3. Si falla, el artifact trae dist/crispy_error.txt con el error.
+
+CÓMO INSTALAR
+1. Pon tu DOOM.WAD en la carpeta wad/ renombrado a doom.wad (minusculas).
+2. Comprime la carpeta y importala en App Studio de Alpine Launcher.
+
+PANTALLA
+- En el engranaje (⚙) eliges "Completa (sin estirar)" o "4:3".
+- El juego arranca solo.
+
+MÚSICA (opcional)
+El WAD trae la música en MIDI. Para tener música puedes poner pistas OGG o MP3:
+1. Crea wad/music/ junto a doom.wad.
+2. Pon pistas con el nombre de la canción del WAD (ej. D_E1M1.ogg).
+3. Crea wad/music/list.txt con un nombre de archivo por línea.
+Si no hay pistas, el juego sigue sin música pero sin errores.
+
+GUARDAR Y CARGAR
+Botones GUARD y CARGA en la barra de arriba (F6 y F9).
