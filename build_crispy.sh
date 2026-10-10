@@ -159,6 +159,12 @@ def collect(root):
     final = []
     for f in srcs:
         base = os.path.basename(f)
+        # midifile.c y mus2mid.c son necesarios para la musica OPL: si traen un main de prueba, se renombra
+        if base in ('midifile.c', 'mus2mid.c') and re.search(r'^\s*(int|void)\s+main\s*\(', rd(f), re.M):
+            wr(f, re.sub(r'^(\s*(?:int|void)\s+)main(\s*\()', r'\1alpine_unused_main\2', rd(f), flags=re.M))
+            print('Se renombra main en', base)
+            final.append(f)
+            continue
         if base != 'i_main.c' and re.search(r'^\s*(int|void)\s+main\s*\(', rd(f), re.M):
             print('Se omite (tiene otro main):', base)
             continue
