@@ -103,8 +103,8 @@ void alpine_tic_hook(void) {
 
 /* ---- Guardados (IndexedDB) ---- */
 EM_JS(void, js_mount, (void), {
-  FS.mkdir('/saves');
-  FS.mount(IDBFS, {}, '/saves');
+  FS.mkdir('/doom1-saves');
+  FS.mount(IDBFS, {}, '/doom1-saves');
   Module.alpineFS = {
     sync: function(populate, cb) { FS.syncfs(populate, cb || function() {}); },
     write: function(path, data) { FS.writeFile(path, data); },

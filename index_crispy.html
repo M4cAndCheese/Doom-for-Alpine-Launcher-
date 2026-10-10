@@ -95,7 +95,7 @@ function cfgMain() {
     'snd_sfxdevice 3', 'snd_musicdevice 3', 'snd_samplerate 44100', 'snd_maxslicetime_ms 70', 'sfx_volume 12', 'music_volume 10'].join('\n') + '\n';
 }
 // Pantalla panorámica automática según la proporción del teléfono.
-function curMode() { return localStorage.getItem('doom-mode') || 'full'; }
+function curMode() { return localStorage.getItem('doom1-mode') || 'full'; }
 function cfgCrispy() {
   const ws = curMode() === '43' ? 0 : 1; // 1 = Match screen: usa la proporción exacta de tu pantalla (Crispy admite hasta 24:9)
   return ['crispy_widescreen ' + ws, 'crispy_hires 1', 'crispy_uncapped 0', 'crispy_smoothscaling 1',
@@ -129,8 +129,8 @@ var Module = {
       }
       if (!name) { msg.textContent = 'Falta wad/doom.wad dentro del zip'; return; }
       A.write('/' + name, data);
-      A.write('/saves/default.cfg', cfgMain());
-      A.write('/saves/crispy-doom.cfg', cfgCrispy());
+      A.write('/doom1-saves/default.cfg', cfgMain());
+      A.write('/doom1-saves/crispy-doom.cfg', cfgCrispy());
       // Música: pistas OGG/MP3 opcionales en wad/music/ (lista en wad/music/list.txt).
       try {
         const lr = await fetch('wad/music/list.txt');
@@ -146,8 +146,8 @@ var Module = {
       } catch (e) { L('Música: error al cargar pack'); }
       msg.remove();
       try {
-        Module.callMain(['-iwad', '/' + name, '-config', '/saves/default.cfg', '-extraconfig', '/saves/crispy-doom.cfg',
-          '-savedir', '/saves/', '-window', '-geometry', geometry()]);
+        Module.callMain(['-iwad', '/' + name, '-config', '/doom1-saves/default.cfg', '-extraconfig', '/doom1-saves/crispy-doom.cfg',
+          '-savedir', '/doom1-saves/', '-window', '-geometry', geometry()]);
       } catch (e) { if (String(e).indexOf('unwind') < 0) L('ERROR: ' + e); }
       setInterval(() => A.sync(false), 4000);
       document.addEventListener('visibilitychange', () => { if (document.hidden) A.sync(false); });
@@ -199,7 +199,7 @@ for (let i = 0; i < 7; i++) CTRL.push({ id: 'w' + (i + 1), k: 20 + i, label: Str
 CTRL.forEach(c => { c.s = 1; c.h = false; c.name = c.name || c.label; });
 
 let op = 1, camMode = 0, sens = 6, editing = false, sel = null, drag = null;
-const LS = 'doom-layout-v2';
+const LS = 'doom1-layout-v2';
 const $ = id => document.getElementById(id);
 const clamp = v => Math.min(.98, Math.max(.02, v));
 
@@ -354,7 +354,7 @@ $('pop').value = op * 100;
 $('psens').value = sens;
 camLabel();
 const scrLabel = () => { $('pscr').textContent = 'Pantalla: ' + (curMode() === '43' ? '4:3' : 'completa (sin estirar)'); };
-$('pscr').onclick = () => { localStorage.setItem('doom-mode', curMode() === '43' ? 'full' : '43'); location.reload(); };
+$('pscr').onclick = () => { localStorage.setItem('doom1-mode', curMode() === '43' ? 'full' : '43'); location.reload(); };
 scrLabel();
 CTRL.forEach(apply);
 $('plog').onclick = () => { logFilter = null; logOn = !logOn; if (logOn) showLog(); else logEl.textContent = ''; };
