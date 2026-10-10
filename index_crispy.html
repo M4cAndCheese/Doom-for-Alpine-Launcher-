@@ -61,6 +61,8 @@ try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrien
 const msg = document.getElementById('msg'), logEl = document.getElementById('log'), cvs = document.getElementById('canvas');
 const lines = [];
 let logOn = true, logFilter = null;
+// Red de seguridad: si la carga se queda, quitar la capa negra para que se vean los controles.
+setTimeout(() => { if (document.getElementById('msg')) { L('Aviso: la carga tardó demasiado; se quita la pantalla de carga.'); document.getElementById('msg').remove(); } }, 15000);
 function showLog() { const v = logFilter ? lines.filter(l => logFilter.test(l)) : lines; logEl.textContent = v.slice(-22).join('\n'); }
 function L(t) {
   t = String(t); lines.push(t); if (lines.length > 600) lines.shift();
@@ -118,7 +120,8 @@ var Module = {
     try {
       Module.ccall('alpine_mount', null, [], []);
       const A = Module.alpineFS;
-      await new Promise(r => A.sync(true, r));
+      // IndexedDB puede no responder en el WebView de Alpine: no bloquear el arranque por los guardados.
+      await Promise.race([new Promise(r => A.sync(true, r)), new Promise(r => setTimeout(r, 4000))]);
       msg.textContent = 'Cargando WAD…';
       let name = null, data = null;
       for (const n of ['doom.wad', 'DOOM.WAD', 'doom1.wad', 'DOOM1.WAD']) {
