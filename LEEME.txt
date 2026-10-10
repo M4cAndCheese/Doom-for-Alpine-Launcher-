@@ -5,3 +5,16 @@ y el flujo .github/workflows/*.yml (corre "bash build.sh").
 build.sh intenta Crispy Doom (ultrawide). Si falla, usa doomgeneric (4:3).
 Al final del log aparece "Motor usado: ...".
 Descarga el artifact "doom-alpine", pon tu DOOM.WAD como wad/doom.wad y abrelo en Alpine Launcher.
+
+----------------------------------------------------------
+MÚSICA (opcional, versión Crispy):
+----------------------------------------------------------
+El WAD trae la música en formato MIDI y el build web no incluye sintetizador MIDI,
+por eso sin pistas extra el juego queda en silencio. Para tener música:
+  1. Crea la carpeta wad/music/ junto a doom.wad.
+  2. Pon pistas OGG o MP3 con el nombre de la canción del WAD (ej. D_E1M1.ogg, D_INTRO.mp3).
+  3. Crea wad/music/list.txt con un nombre de archivo por línea.
+El build las copia al iniciar. Si no hay pistas, el juego sigue sin música pero sin errores.
+
+PANTALLA: en el engranaje (⚙) eliges "Completa (sin estirar)" o "4:3".
+El juego arranca solo. Guardar y cargar están en la barra de arriba (GUARD / CARGA).
