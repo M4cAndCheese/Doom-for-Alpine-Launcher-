@@ -167,6 +167,10 @@ def collect(root):
     uniq, vistos = [], set()
     for f in final:
         b = os.path.basename(f)
+        # z_native.c y z_zone.c son alternativas que definen las mismas Z_*: usar solo z_zone.c
+        if b == 'z_native.c':
+            print('Se omite alternativa de memoria:', f)
+            continue
         if b in vistos and b != 'i_main.c':
             print('Se omite duplicado:', f)
             continue
