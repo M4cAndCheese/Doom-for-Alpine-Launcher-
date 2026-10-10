@@ -132,7 +132,7 @@ def sanitize_config(root):
 
 def collect(root):
     cc = json.load(open(os.path.join(root, 'build', 'compile_commands.json')))
-    skip = re.compile(r'heretic|hexen|strife|setup|server|midiread|fuzz|test|^doom$')  # 'doom' (vanilla) duplica z_zone y demas de crispy-doom
+    skip = re.compile(r'heretic|hexen|strife|setup|server|midiread|fuzz|test')
     by_target = {}
     for e in cc:
         toks = shlex.split(e['command'])
@@ -163,19 +163,8 @@ def collect(root):
             print('Se omite (tiene otro main):', base)
             continue
         final.append(f)
-    # Sin duplicados por nombre de archivo (evita 'duplicate symbol' al enlazar)
-    uniq, vistos = [], set()
-    for f in final:
-        b = os.path.basename(f)
-        # z_native.c y z_zone.c son alternativas que definen las mismas Z_*: usar solo z_zone.c
-        if b == 'z_native.c':
-            print('Se omite alternativa de memoria:', f)
-            continue
-        if b in vistos and b != 'i_main.c':
-            print('Se omite duplicado:', f)
-            continue
-        vistos.add(b); uniq.append(f)
-    final = uniq
+    # z_native.c y z_zone.c son alternativas que definen las mismas Z_*: usar solo z_zone.c
+    final = [f for f in final if os.path.basename(f) != 'z_native.c']
     for extra in ('src', os.path.join('src', 'doom'), 'build'):
         p = os.path.abspath(os.path.join(root, extra))
         if p not in incs:

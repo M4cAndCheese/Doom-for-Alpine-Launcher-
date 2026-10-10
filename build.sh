@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # Uso: bash build.sh [CARPETA_CON_DOOM.WAD]
-# Intenta Crispy Doom (ultrawide); si falla, usa doomgeneric (la version estable).
+# Motor unico: Crispy Doom (ultrawide, sin estirar). Si falla, deja dist/crispy_error.txt.
 set -o pipefail
 rm -rf dist && mkdir -p dist/wad
-if bash build_crispy.sh 2>&1 | tee crispy.log; then
-  echo "=== MOTOR: Crispy Doom ==="
-else
-  echo "=== MOTOR: Crispy Doom fallo; se usa doomgeneric (4:3) ==="
-  rm -rf dist && mkdir -p dist/wad
-  tail -n 400 crispy.log > dist/crispy_error.txt 2>/dev/null || true
-  bash build_doomgeneric.sh
+if ! bash build_crispy.sh 2>&1 | tee crispy.log; then
+  mkdir -p dist
+  tail -n 400 crispy.log > dist/crispy_error.txt
+  echo "=== ERROR: Crispy Doom fallo. Revisa dist/crispy_error.txt ==="
+  exit 1
 fi
-set -e
+echo "=== MOTOR: Crispy Doom ==="
 echo "Pon aqui tu DOOM.WAD renombrado a doom.wad (minusculas)." > dist/wad/LEEME.txt
 if [ -n "$1" ]; then
   WAD=$(find "$1" -maxdepth 1 \( -iname doom.wad -o -iname doom1.wad \) | head -1)
