@@ -55,7 +55,7 @@
 </div>
 <script src="/__alpine/host.js"></script>
 <script>
-try { Alpine.host.chrome.setStatusBar('fullscreen'); Alpine.host.chrome.setOrientation('landscape'); } catch (e) {}
+// Sin cambios globales del launcher (setStatusBar/setOrientation afectaban a todas las apps).
 
 /* ---------- Motor (Crispy Doom) ---------- */
 const msg = document.getElementById('msg'), logEl = document.getElementById('log'), cvs = document.getElementById('canvas');
