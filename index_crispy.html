@@ -49,6 +49,7 @@
   <div class="row"><button id="pcam">Cámara: analógica</button></div>
   <div class="row"><button id="plog">Ver registro del motor</button></div>
   <div class="row"><button id="psnd">Ver registro de sonido y guardado</button></div>
+  <div class="row"><button id="pfs">Pantalla completa</button></div>
   <div class="row"><button id="pscr">Pantalla</button></div>
   <div class="row"><button id="pdone">Listo</button></div>
   <small>Arrastra cada control para moverlo.</small>
@@ -112,6 +113,7 @@ function geometry() {
   return Math.round(innerWidth * s) + 'x' + Math.round(innerHeight * s);
 }
 
+const fetchWithTimeout = (url, ms) => { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); return fetch(url, { signal: ac.signal }).finally(() => clearTimeout(t)); };
 var Module = {
   canvas: cvs,
   print: t => L(t),
@@ -125,7 +127,7 @@ var Module = {
       msg.textContent = 'Cargando WAD…';
       let name = null, data = null;
       for (const n of ['doom.wad', 'DOOM.WAD', 'doom1.wad', 'DOOM1.WAD']) {
-        try { const r = await fetch('wad/' + n); if (r.ok) { data = new Uint8Array(await r.arrayBuffer()); name = n; break; } } catch (e) {}
+        try { msg.textContent = 'Leyendo wad/' + n + '…'; const r = await fetchWithTimeout('wad/' + n, 60000); if (r.ok) { data = new Uint8Array(await r.arrayBuffer()); name = n; break; } L('wad/' + n + ': HTTP ' + r.status); } catch (e) { L('wad/' + n + ': ' + e); msg.textContent = 'No se pudo leer wad/' + n + ': ' + e; }
       }
       if (!name) { msg.textContent = 'Falta wad/doom.wad dentro del zip'; return; }
       A.write('/' + name, data);
@@ -355,6 +357,19 @@ $('psens').value = sens;
 camLabel();
 const scrLabel = () => { $('pscr').textContent = 'Pantalla: ' + (curMode() === '43' ? '4:3' : 'completa (sin estirar)'); };
 $('pscr').onclick = () => { localStorage.setItem('doom1-mode', curMode() === '43' ? 'full' : '43'); location.reload(); };
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsLabel = () => { $('pfs').textContent = fsEl() ? 'Salir de pantalla completa' : 'Pantalla completa'; };
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('pfs').hidden = true;
+$('pfs').onclick = () => {
+  try {
+    if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch(() => {});
+    else (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement).catch(() => {});
+  } catch (e) {}
+  setTimeout(fsLabel, 300);
+};
+document.addEventListener('fullscreenchange', fsLabel);
+document.addEventListener('webkitfullscreenchange', fsLabel);
+fsLabel();
 scrLabel();
 CTRL.forEach(apply);
 $('plog').onclick = () => { logFilter = null; logOn = !logOn; if (logOn) showLog(); else logEl.textContent = ''; };
